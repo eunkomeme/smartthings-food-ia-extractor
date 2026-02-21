@@ -27,82 +27,52 @@
 
 ---
 
-## 2. 네비게이션 관계 Mermaid 다이어그램
+## 2. 네비게이션 트리 구조
 
-```mermaid
-flowchart TD
-    %% SmartThings 메인 앱
-    ST_LIFE["SmartThings 메인 앱\n라이프 탭 (F-S21)"]
-
-    %% Food 플러그인 진입
-    ST_LIFE -->|"Food 섹션 > 버튼 탭"| FOOD_HOME
-
-    subgraph FOOD["Food 플러그인"]
-
-        %% 홈 탭
-        FOOD_HOME["Food 홈\n(F-S01)"]
-        FOOD_HOME_SCROLL["Food 홈 스크롤 하단\n개인화 추천 섹션\n(F-S18)"]
-        FOOD_HOME --> FOOD_HOME_SCROLL
-
-        %% 검색 탭
-        SEARCH_HOME["검색 탭 홈\n입력 전 상태\n(F-S19)"]
-
-        %% 커뮤니티 탭
-        COMMUNITY_HOME["커뮤니티 탭 홈\n(F-S20)"]
-
-        %% MY / 건강 데이터
-        HEALTH_DATA_1["오늘의 건강 데이터\n291 kcal (F-S13)"]
-        HEALTH_DATA_2["오늘의 건강 데이터\n1,068 kcal (F-S22)"]
-        HEALTH_DATA_3["오늘의 건강 데이터\n5,006 kcal (F-S25)"]
-
-        %% 레시피 상세
-        RECIPE_DETAIL_GREEN["레시피 상세\nGreen breakfast...\n(F-S14/F-S15)"]
-        RECIPE_DETAIL_CHORIZO["레시피 상세\nChorizo & mozzarella...\n(F-S16)"]
-        RECIPE_DETAIL_CHOC["레시피 상세\nChocolate & banana...\n(F-S24)"]
-
-        %% 하단 탭 전환
-        FOOD_HOME -->|"검색 탭 탭"| SEARCH_HOME
-        FOOD_HOME -->|"커뮤니티 탭 탭"| COMMUNITY_HOME
-        FOOD_HOME -->|"MY 탭 또는 건강 데이터 진입"| HEALTH_DATA_1
-
-        %% 홈 → 레시피 상세
-        FOOD_HOME -->|"레시피 카드 탭"| RECIPE_DETAIL_GREEN
-        FOOD_HOME -->|"레시피 카드 탭"| RECIPE_DETAIL_CHORIZO
-        FOOD_HOME_SCROLL -->|"레시피 카드 탭"| RECIPE_DETAIL_CHORIZO
-
-        %% 레시피 상세 → CTA
-        RECIPE_DETAIL_GREEN -->|"섭취한 음식으로 기록하기"| MEAL_TIME_DIALOG
-        RECIPE_DETAIL_CHORIZO -->|"섭취한 음식으로 기록하기"| MEAL_TIME_DIALOG
-        RECIPE_DETAIL_CHOC -->|"섭취한 음식으로 기록하기"| MEAL_TIME_DIALOG
-
-        %% 식사 시간 선택 다이얼로그
-        MEAL_TIME_DIALOG["식사 시간 선택\n다이얼로그\n(F-S12)\n아침/점심/저녁/간식"]
-        MEAL_TIME_DIALOG -->|"확인"| HEALTH_DATA_1
-        MEAL_TIME_DIALOG -->|"취소"| RECIPE_DETAIL_GREEN
-
-        %% 건강 데이터 상태 변화 (동일 화면, 데이터 갱신)
-        HEALTH_DATA_1 -->|"식사 추가 후 갱신"| HEALTH_DATA_2
-        HEALTH_DATA_2 -->|"식사 추가 후 갱신"| HEALTH_DATA_3
-
-        %% 건강 데이터 → 섭취 기록 목록
-        HEALTH_DATA_1 -->|"섭취 기록 > 버튼"| INTAKE_LIST
-        HEALTH_DATA_2 -->|"섭취 기록 > 버튼"| INTAKE_LIST
-        HEALTH_DATA_3 -->|"섭취 기록 > 버튼"| INTAKE_LIST
-        INTAKE_LIST["섭취 기록 목록\n(F-S17)\n분량 조절 ─/+"]
-        INTAKE_LIST -->|"완료"| HEALTH_DATA_2
-
-        %% 건강 데이터 → 식사 기록하기
-        HEALTH_DATA_1 -->|"식사 기록하기 CTA"| RECIPE_DETAIL_CHORIZO
-
-        %% 검색 CTA → 검색 결과 (미수집)
-        SEARCH_HOME -->|"검색 버튼"| SEARCH_RESULT["검색 결과\n(미수집)"]
-
-        %% 커뮤니티 채널 상세 (미수집)
-        COMMUNITY_HOME -->|"채널 카드 탭"| COMMUNITY_CHANNEL["커뮤니티 채널 상세\n(미수집)"]
-    end
-
-    %% Back 동작
-    FOOD_HOME -->|"< Back"| ST_LIFE
+```
+SmartThings 메인 앱
+└── 라이프 탭 (F-S21)
+    └── [Food 섹션 > 버튼] → Food 플러그인 진입
+        │
+        ├── 🏠 홈 탭
+        │   ├── Food 홈 (F-S01)
+        │   │   ├── [스크롤 다운] 개인화 추천 섹션 (F-S18)
+        │   │   ├── [내 재료로 요리하기 >] → 재료 기반 레시피 목록 (미수집)
+        │   │   ├── [내 푸드리스트로 이동] → 내 푸드리스트 (미수집)
+        │   │   └── [내 커뮤니티 채널 카드] → 커뮤니티 채널 상세 (미수집)
+        │   └── 레시피 카드 탭
+        │       └── 레시피 상세 (F-S14 / F-S16 / F-S24)
+        │           ├── [스크롤 상단] 재료 목록 / 기본 정보 (미수집)
+        │           ├── [단계별 요리하기] → 단계별 요리 화면 (미수집)
+        │           ├── [쇼핑리스트로 보내기] → 쇼핑리스트 (미수집)
+        │           ├── [노트 작성하기] → 노트 화면 (미수집)
+        │           └── [섭취한 음식으로 기록하기]
+        │               └── 식사 시간 선택 Modal (F-S12)  아침/점심/저녁/간식
+        │                   ├── [확인] → 오늘의 건강 데이터 (F-S13 / F-S22 / F-S25)
+        │                   │           ├── [섭취 기록 >] → 섭취 기록 목록 (F-S17)  분량 ─/+
+        │                   │           ├── [식사 기록하기] → 레시피 상세
+        │                   │           └── [맞춤 추천 레시피 더보기] → (미수집)
+        │                   └── [취소] → 레시피 상세 복귀
+        │
+        ├── 🔍 검색 탭
+        │   └── 검색 홈 (F-S19)  최근 검색 / 재료 필터 / 음식 취향 토글
+        │       ├── [편집] → 음식 취향 편집 (미수집)
+        │       └── [검색]
+        │           ├── 레시피 검색 결과 (미수집)
+        │           │   └── 레시피 카드 탭 → 레시피 상세
+        │           └── 커뮤니티 검색 결과 (미수집)
+        │
+        ├── 👥 커뮤니티 탭
+        │   └── 커뮤니티 홈 (F-S20)  채널 목록
+        │       └── [채널 카드] → 커뮤니티 채널 상세 (미수집)
+        │
+        ├── 👤 MY 탭
+        │   └── MY 홈 (미수집)
+        │       ├── 오늘의 건강 데이터 (F-S13 / F-S22 / F-S25)
+        │       └── 맞춤 추천 레시피 섹션
+        │
+        └── 📷 바코드 탭
+            └── 바코드 스캔 화면 (미수집)  간편식/밀키트 스캔
 ```
 
 ---
