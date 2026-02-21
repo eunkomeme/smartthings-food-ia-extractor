@@ -278,3 +278,35 @@ SmartThings 메인 앱
 
 > 참고: 현재 작업 환경에서는 `play-lh.googleusercontent.com` 원본 이미지 접근이 제한되어,
 > 스토어 스크린샷의 직접 판독(텍스트/OCR)은 수행하지 못했다.
+
+
+---
+[피그마 다이어그램 링크](https://www.figma.com/board/yTaNMWuikWqEiANvjMYXTV/Samsung-SmartThings-Food-IA--Dashed---Stack-Depth-Overlay-?node-id=0-1&t=xsYiTsQpBbt5Q7UC-1)
+
+
+## ✅ 1. 미수집 영역 점선 처리
+
+점선(Stroke Dash) 적용 대상:
+
+* 단계별 요리하기
+* 쇼핑리스트
+* 노트 작성하기
+* 검색 결과 (레시피 / 커뮤니티)
+* 커뮤니티 채널 상세
+* MY 홈
+* 바코드 스캔 화면
+
+→ 즉, **직접 판독되지 않은 화면만 시각적으로 구분**했습니다.
+
+---
+
+## ✅ 2. Stack Depth 색상 오버레이
+
+색상 기준:
+
+* 🔴 Depth 0: SmartThings 메인 앱 영역
+* 🔵 Depth 1: Food 5탭 루트 레벨
+* 🟢 Depth 2: 상세 화면 레벨 (레시피 상세, 건강 데이터 등)
+* 🟣 Depth 3: 상세 내부 확장 화면 (섭취 기록 목록 등)
+
+Modal은 Depth2 흐름 안에서 분기 표현.
