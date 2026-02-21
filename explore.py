@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-SmartThings Food 플러그인 추가 화면 수집 스크립트
-- 미수집 화면 타겟 탐색
-- 화면 변화 감지 후 자동 저장
-- 중복 방지 (해시 비교)
+SmartThings Food 플러그인 추가 화면 수집 스크립트 v2
+- Food 플러그인 내부에서만 탐색
+- 탭 좌표: 실제 화면 기준 (1440x3120, 탭바 Y≈3050)
+  홈=144, 검색=432, 커뮤니티=720, MY=1008, 바코드=1296
 """
 
 import subprocess
@@ -16,339 +16,220 @@ ADB = "/opt/homebrew/bin/adb"
 SCREENS_DIR = Path("data/screens")
 SCREENS_DIR.mkdir(parents=True, exist_ok=True)
 
-# 기존 화면 수
+# 기존 파일 수
 existing = sorted(SCREENS_DIR.glob("F-S*.png"))
-next_id = len(existing) + 1 if existing else 70
+next_id = max([int(f.stem.replace("F-S","")) for f in existing], default=69) + 1
 
 saved_hashes = set()
-
-# 기존 파일 해시 로드 (중복 방지)
 for f in existing:
     with open(f, "rb") as fp:
         saved_hashes.add(hashlib.md5(fp.read()).hexdigest())
 
+# 탭바 좌표 (실측)
+TAB_Y = 3060
+TAB_HOME      = (144,  TAB_Y)
+TAB_SEARCH    = (432,  TAB_Y)
+TAB_COMMUNITY = (720,  TAB_Y)
+TAB_MY        = (1008, TAB_Y)
+TAB_BARCODE   = (1296, TAB_Y)
+
 
 def adb(*args):
-    result = subprocess.run([ADB] + list(args), capture_output=True)
-    return result.stdout
+    return subprocess.run([ADB] + list(args), capture_output=True).stdout
 
-
-def adb_shell(*args):
+def shell(*args):
     return adb("shell", *args)
 
+def tap(x, y, wait=1.8):
+    shell("input", "tap", str(x), str(y))
+    time.sleep(wait)
+
+def swipe_up(wait=1.2):
+    shell("input", "swipe", "720", "2000", "720", "800", "400")
+    time.sleep(wait)
+
+def swipe_down(wait=1.2):
+    shell("input", "swipe", "720", "800", "720", "2000", "400")
+    time.sleep(wait)
+
+def food_back(wait=1.8):
+    """Food 내부 < 버튼 (좌상단 실측 좌표)"""
+    shell("input", "tap", "75", "195")
+    time.sleep(wait)
 
 def screenshot():
-    adb_shell("screencap", "-p", "/sdcard/tmp_cap.png")
-    local = Path("/tmp/food_cap.png")
-    adb("pull", "/sdcard/tmp_cap.png", str(local))
-    if local.exists():
-        with open(local, "rb") as f:
-            return f.read()
-    return None
+    shell("screencap", "-p", "/sdcard/tmp.png")
+    local = "/tmp/food_tmp.png"
+    adb("pull", "/sdcard/tmp.png", local)
+    with open(local, "rb") as f:
+        return f.read()
 
-
-def save_screen(data, label=""):
+def save(label=""):
     global next_id
+    data = screenshot()
     h = hashlib.md5(data).hexdigest()
     if h in saved_hashes:
-        print(f"  [중복] 스킵")
+        print(f"  [중복 스킵] {label}")
         return False
     saved_hashes.add(h)
     fname = SCREENS_DIR / f"F-S{next_id:02d}.png"
     with open(fname, "wb") as f:
         f.write(data)
-    print(f"  [저장] {fname.name} {label}")
+    print(f"  [저장] {fname.name}  {label}")
     next_id += 1
     return True
 
+def is_in_food():
+    out = adb("shell", "dumpsys", "activity", "activities").decode(errors="ignore")
+    return "WebPluginActivity" in out
 
-def tap(x, y):
-    adb_shell("input", "tap", str(x), str(y))
-    time.sleep(1.5)
+def goto_home():
+    tap(*TAB_HOME)
 
-
-def swipe_up():
-    adb_shell("input", "swipe", "720", "1800", "720", "900", "400")
-    time.sleep(1.0)
-
-
-def swipe_down():
-    adb_shell("input", "swipe", "720", "900", "720", "1800", "400")
-    time.sleep(1.0)
-
-
-def back():
-    # Food 플러그인 내 < 버튼 (좌상단)
-    adb_shell("input", "tap", "80", "200")
-    time.sleep(1.5)
-
-
-def key_back():
-    adb_shell("input", "keyevent", "4")
-    time.sleep(1.5)
-
-
-def capture_and_save(label=""):
-    data = screenshot()
-    if data:
-        save_screen(data, label)
-    return data
-
-
-def get_activity():
-    out = adb_shell("dumpsys", "activity", "activities").decode(errors="ignore")
-    for line in out.split("\n"):
-        if "mResumedActivity" in line or "ResumedActivity" in line:
-            return line.strip()
-    return ""
-
-
-def ensure_food_home():
-    """Food 홈 탭으로 이동"""
-    activity = get_activity()
-    if "WebPluginActivity" not in activity:
-        print("  [!] Food 플러그인 밖 - 홈 탭으로 이동")
-        # SmartThings 라이프 탭 Food 섹션 > 버튼
-        tap(1350, 882)  # 라이프 탭 Food > 버튼
-        time.sleep(2)
-
-    # 홈 탭 클릭 (탭바 Y=3050, 홈 X=144)
-    tap(144, 3050)
-    time.sleep(1.5)
-
-
-# ─────────────────────────────────────
-# 탐색 시작
-# ─────────────────────────────────────
-print("=" * 50)
-print("SmartThings Food 추가 화면 수집 시작")
-print(f"저장 경로: {SCREENS_DIR}")
 print(f"시작 ID: F-S{next_id:02d}")
 print("=" * 50)
-print()
-
-# 현재 화면 확인
-print("[0] 현재 화면 저장")
-capture_and_save("현재 상태")
-time.sleep(0.5)
 
 # ─────────────────────────────────────
-# 1. MY 탭
+# MY 탭
 # ─────────────────────────────────────
-print()
-print("[1] MY 탭 탐색")
-tap(1080, 3050)  # MY 탭
-time.sleep(2)
-capture_and_save("MY 탭 홈")
-
-# MY 탭 스크롤 다운
+print("\n[MY 탭]")
+tap(*TAB_MY)
+save("MY 탭 홈")
 swipe_up()
-capture_and_save("MY 탭 스크롤 하단")
-
+save("MY 탭 스크롤")
 swipe_down()
 
 # ─────────────────────────────────────
-# 2. 검색 탭 → 검색 결과
+# 검색 탭 → 검색 결과
 # ─────────────────────────────────────
-print()
-print("[2] 검색 탭 → 결과 탐색")
-tap(432, 3050)  # 검색 탭
-time.sleep(2)
-capture_and_save("검색 탭 초기")
+print("\n[검색 탭]")
+tap(*TAB_SEARCH)
+save("검색 홈")
 
-# 검색어 입력 (검색 입력창 탭)
-tap(720, 300)
+# 검색창 탭 (화면 상단 검색바 위치)
+tap(720, 280, wait=1.5)
+save("검색창 활성")
+shell("input", "text", "pasta")
 time.sleep(1)
-capture_and_save("검색 입력 활성")
-
-adb_shell("input", "text", "pasta")
-time.sleep(1)
-capture_and_save("검색어 입력 후")
-
-# 검색 실행 (키보드 검색/엔터)
-adb_shell("input", "keyevent", "66")
+save("검색어 입력")
+shell("input", "keyevent", "66")  # Enter
 time.sleep(3)
-capture_and_save("검색 결과 - 레시피")
-
-# 스크롤 다운
+save("검색 결과 레시피")
 swipe_up()
-capture_and_save("검색 결과 스크롤")
+save("검색 결과 스크롤")
 swipe_down()
 
-# 검색 결과 첫 번째 레시피 클릭
-tap(360, 600)
-time.sleep(2)
-capture_and_save("검색 결과 레시피 상세 상단")
-swipe_up()
-time.sleep(0.5)
-capture_and_save("검색 결과 레시피 상세 중간")
-swipe_up()
-time.sleep(0.5)
-capture_and_save("검색 결과 레시피 상세 하단")
+# 검색 결과 첫 레시피 클릭
+tap(360, 700, wait=2)
+save("검색→레시피 상세 상단")
+swipe_up(); save("검색→레시피 상세 중간")
+swipe_up(); save("검색→레시피 상세 하단")
 swipe_down(); swipe_down()
+food_back()
 
-# 검색 탭으로 돌아가기
-back()
-time.sleep(1.5)
-
-# 커뮤니티 검색 탭
-tap(600, 160)  # 커뮤니티 탭 전환 (상단 탭)
-time.sleep(1.5)
-capture_and_save("검색 탭 - 커뮤니티 전환")
-
-adb_shell("input", "text", "healthy")
+# 커뮤니티 탭으로 전환 (검색 탭 내 상단 탭)
+tap(800, 280, wait=1.5)
+save("검색 탭 - 커뮤니티 전환")
+shell("input", "text", "healthy")
 time.sleep(1)
-adb_shell("input", "keyevent", "66")
+shell("input", "keyevent", "66")
 time.sleep(3)
-capture_and_save("커뮤니티 검색 결과")
+save("커뮤니티 검색 결과")
 
-# ─────────────────────────────────────
-# 3. 커뮤니티 탭 → 채널 상세
-# ─────────────────────────────────────
-print()
-print("[3] 커뮤니티 채널 상세 탐색")
-tap(720, 3050)  # 커뮤니티 탭
+# 음식 취향 편집 - 검색 홈으로 돌아가서
+tap(*TAB_SEARCH)
 time.sleep(2)
-capture_and_save("커뮤니티 탭")
+save("검색 홈 복귀")
+# 편집 링크 (검색 홈 내 "내 음식 취향" 섹션 우측)
+tap(1330, 700, wait=2)
+save("음식 취향 편집")
+swipe_up(); save("음식 취향 편집 스크롤")
+food_back()
 
+# ─────────────────────────────────────
+# 커뮤니티 탭 → 채널 상세
+# ─────────────────────────────────────
+print("\n[커뮤니티 탭]")
+tap(*TAB_COMMUNITY)
+save("커뮤니티 홈")
 # 첫 번째 채널 클릭
-tap(360, 400)
-time.sleep(2)
-capture_and_save("커뮤니티 채널 상세")
-swipe_up()
-capture_and_save("커뮤니티 채널 스크롤")
-swipe_down()
-back()
-time.sleep(1.5)
+tap(360, 500, wait=2)
+save("커뮤니티 채널 상세")
+swipe_up(); save("커뮤니티 채널 스크롤")
+food_back()
 
 # ─────────────────────────────────────
-# 4. 홈 탭 → 내 재료로 요리하기 결과
+# 홈 탭 → 레시피 상세 상단 (재료/정보)
 # ─────────────────────────────────────
-print()
-print("[4] 홈 → 내 재료로 요리하기 결과")
-tap(144, 3050)  # 홈 탭
+print("\n[홈 → 레시피 상세]")
+goto_home()
 time.sleep(2)
-capture_and_save("홈 탭 초기")
+save("홈 초기")
 
-# 내 재료로 요리하기 > 버튼 (우측 > 버튼)
-# 홈 화면에서 섹션 우측 > 버튼 위치 추정
-tap(1350, 600)
-time.sleep(2)
-capture_and_save("내 재료로 요리하기 결과")
-swipe_up()
-capture_and_save("내 재료로 요리하기 결과 스크롤")
-swipe_down()
-back()
-time.sleep(1.5)
-
-# ─────────────────────────────────────
-# 5. 홈 → 내 푸드리스트
-# ─────────────────────────────────────
-print()
-print("[5] 내 푸드리스트")
-tap(144, 3050)  # 홈 탭
-time.sleep(2)
-
-# 홈 스크롤 내려서 푸드리스트 버튼 찾기
-swipe_up()
-time.sleep(0.5)
-capture_and_save("홈 스크롤 - 푸드리스트 버튼 찾기")
-
-# 내 푸드리스트로 이동 버튼 클릭 (대략적 위치)
-tap(720, 1600)
-time.sleep(2)
-capture_and_save("내 푸드리스트")
-swipe_up()
-capture_and_save("내 푸드리스트 스크롤")
-swipe_down()
-back()
-time.sleep(1.5)
-
-# ─────────────────────────────────────
-# 6. 레시피 상세 → 단계별 요리하기
-# ─────────────────────────────────────
-print()
-print("[6] 단계별 요리하기")
-tap(144, 3050)  # 홈 탭
-time.sleep(2)
-swipe_down()
-
-# 레시피 카드 클릭
-tap(360, 900)
-time.sleep(2)
-capture_and_save("레시피 상세 상단")
-swipe_up()
-time.sleep(0.5)
-capture_and_save("레시피 상세 재료 섹션")
-swipe_up()
-time.sleep(0.5)
-capture_and_save("레시피 상세 하단 CTA")
+# 레시피 카드 클릭 (홈 화면 레시피 카드 위치)
+tap(360, 1200, wait=2)
+save("레시피 상세 상단 (재료/정보)")
+swipe_up(); save("레시피 상세 중간")
+swipe_up(); save("레시피 상세 하단")
 
 # 단계별 요리하기 버튼 (하단 오렌지 버튼)
-tap(720, 2900)
-time.sleep(2)
-capture_and_save("단계별 요리하기 화면")
-swipe_up()
-capture_and_save("단계별 요리하기 스크롤")
-swipe_down()
-back()
-time.sleep(1.5)
+tap(720, 2950, wait=2)
+save("단계별 요리하기")
+swipe_up(); save("단계별 요리하기 스크롤")
+food_back()
 
-# ─────────────────────────────────────
-# 7. 레시피 상세 → 쇼핑리스트
-# ─────────────────────────────────────
-print()
-print("[7] 쇼핑리스트")
-# 레시피 상세로 다시 진입
-tap(360, 900)
-time.sleep(2)
+# 쇼핑리스트로 보내기
+tap(360, 1200, wait=2)
 swipe_up(); swipe_up()
+tap(360, 1400, wait=2)  # 쇼핑리스트 버튼
+save("쇼핑리스트")
+swipe_up(); save("쇼핑리스트 스크롤")
+food_back()
 
-# 쇼핑리스트로 보내기 버튼
-tap(360, 1200)
+# ─────────────────────────────────────
+# 홈 → 내 재료로 요리하기
+# ─────────────────────────────────────
+print("\n[내 재료로 요리하기]")
+goto_home()
 time.sleep(2)
-capture_and_save("쇼핑리스트 화면")
+# 섹션 > 버튼 (홈 상단 섹션)
+tap(1380, 750, wait=2)
+save("내 재료로 요리하기 결과")
+swipe_up(); save("내 재료로 요리하기 스크롤")
+food_back()
+
+# ─────────────────────────────────────
+# 홈 → 내 푸드리스트
+# ─────────────────────────────────────
+print("\n[내 푸드리스트]")
+goto_home()
+time.sleep(2)
+# 내 푸드리스트로 이동 버튼 (홈 최상단 버튼)
+tap(720, 300, wait=2)
+save("내 푸드리스트")
+swipe_up(); save("내 푸드리스트 스크롤")
+food_back()
+
+# ─────────────────────────────────────
+# 홈 → 내 커뮤니티 채널
+# ─────────────────────────────────────
+print("\n[내 커뮤니티]")
+goto_home()
+time.sleep(2)
 swipe_up()
-capture_and_save("쇼핑리스트 스크롤")
-swipe_down()
-back()
-time.sleep(1.5)
+# 내 커뮤니티 채널 카드 클릭
+tap(200, 1200, wait=2)
+save("내 커뮤니티 채널 상세")
+food_back()
 
 # ─────────────────────────────────────
-# 8. 음식 취향 편집
+# 바코드 탭
 # ─────────────────────────────────────
-print()
-print("[8] 음식 취향 편집")
-tap(432, 3050)  # 검색 탭
-time.sleep(2)
-
-# 편집 링크 클릭
-tap(1300, 600)
-time.sleep(2)
-capture_and_save("음식 취향 편집")
-swipe_up()
-capture_and_save("음식 취향 편집 스크롤")
-swipe_down()
-back()
-time.sleep(1.5)
+print("\n[바코드 탭]")
+tap(*TAB_BARCODE)
+save("바코드 스캔")
+food_back()
 
 # ─────────────────────────────────────
-# 9. 바코드 스캔
-# ─────────────────────────────────────
-print()
-print("[9] 바코드 스캔")
-tap(1368, 3050)  # 바코드 탭 (5번째)
-time.sleep(2)
-capture_and_save("바코드 스캔 화면")
-back()
-time.sleep(1.5)
-
-# ─────────────────────────────────────
-# 완료
-# ─────────────────────────────────────
-print()
-print("=" * 50)
-print(f"수집 완료! 저장된 화면 확인: {SCREENS_DIR}")
-new_files = sorted(SCREENS_DIR.glob("F-S*.png"))
-print(f"총 {len(new_files)}개 화면")
-print("=" * 50)
+print("\n" + "=" * 50)
+print(f"완료! 총 {len(sorted(SCREENS_DIR.glob('F-S*.png')))}개 화면")
