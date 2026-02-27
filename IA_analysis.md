@@ -1,6 +1,5 @@
 # Samsung SmartThings Food 플러그인 IA 분석 문서
 
-> 문서 운영 기준: **`IA_analysis.md` 단일 원본**으로 관리합니다. `ia-analysis.md`는 참조용 alias 파일입니다.
 
 - 분석 기준: 1차=실제 스크린샷 직접 판독, 2차=인터넷 스크래핑(공식 스토어 메타데이터)
 - 수집 화면 수: 14개 (F-S01, F-S12~F-S22, F-S24, F-S25)
